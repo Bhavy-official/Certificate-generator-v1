@@ -5,24 +5,39 @@ import Certificate from "@/models/Certificate";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
-  await connectDB();
+  try {
+    await connectDB();
 
-  const formData = await req.formData();
-  const file = formData.get("file") as File;
+    const formData = await req.formData();
+    const file = formData.get("file") as File;
 
-  const text = await file.text();
+    if (!file) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
 
-  const parsed = Papa.parse(text, { header: true });
+    const text = await file.text();
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
 
-  const results = [];
+    if (parsed.errors.length > 0) {
+      return NextResponse.json({ error: "Invalid CSV format", details: parsed.errors }, { status: 400 });
+    }
 
-  for (const row of parsed.data as any[]) {
-    const cert = await Certificate.create({
-      ...row,
-      certificate_id: "CERT-" + uuidv4(),
-    });
-    results.push(cert);
+    const results = [];
+
+    for (const row of parsed.data as any[]) {
+      // Basic validation for name and course
+      if (!row.name || !row.course) continue;
+
+      const cert = await Certificate.create({
+        ...row,
+        certificate_id: "CERT-" + uuidv4().slice(0, 8).toUpperCase(),
+      });
+      results.push(cert);
+    }
+
+    return NextResponse.json({ success: true, count: results.length, data: results });
+  } catch (error: any) {
+    console.error("Upload error:", error);
+    return NextResponse.json({ error: "Internal Server Error", message: error.message }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true, data: results });
-}
+}

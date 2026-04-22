@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { generatePDF } from "@/lib/pdfGenerator";
-import { records } from "../upload/route";
+import { connectDB } from "@/lib/mongodb";
+import Certificate from "@/models/Certificate";
 
 export async function GET() {
-  if (!records.length) {
-    return NextResponse.json({ error: "No records found" });
+  await connectDB();
+
+  const records = await Certificate.find().sort({ created_at: -1 });
+
+  if (!records || records.length === 0) {
+    return NextResponse.json({ error: "No records found" }, { status: 404 });
   }
 
   const zip = new JSZip();
@@ -27,4 +32,4 @@ export async function GET() {
       "Content-Disposition": "attachment; filename=certificates.zip",
     },
   });
-}
+}
